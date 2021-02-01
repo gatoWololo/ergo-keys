@@ -6,8 +6,14 @@
 
 package com.github.amibiz.ergokeys;
 
+import com.intellij.execution.configurations.RefactoringListenerProvider;
+import com.intellij.execution.junit.RefactoringListeners;
+import com.intellij.find.SearchReplaceComponent;
 import com.intellij.find.actions.FindInPathAction;
+import com.intellij.ide.actions.HideAllToolWindowsAction;
 import com.intellij.ide.actions.SearchEverywhereAction;
+
+import com.intellij.ide.actions.ShowSettingsAction;
 import com.intellij.ide.actions.ViewStructureAction;
 import com.intellij.ide.actions.runAnything.RunAnythingAction;
 import com.intellij.ide.util.PropertiesComponent;
@@ -21,14 +27,23 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.editor.actions.IncrementalFindAction;
+import com.intellij.openapi.editor.actions.ReplaceAction;
 import com.intellij.openapi.editor.event.EditorFactoryEvent;
 import com.intellij.openapi.editor.event.EditorFactoryListener;
 import com.intellij.openapi.keymap.Keymap;
 import com.intellij.openapi.keymap.KeymapManagerListener;
 import com.intellij.openapi.keymap.ex.KeymapManagerEx;
+import com.intellij.psi.PsiElement;
+import com.intellij.refactoring.actions.BaseRefactoringAction;
+import com.intellij.refactoring.actions.RenameElementAction;
+import com.intellij.refactoring.actions.RenameFileAction;
+import com.intellij.refactoring.listeners.RefactoringElementListener;
+import com.intellij.terminal.JBTerminalPanel;
+import com.jediterm.terminal.ui.TerminalPanelListener;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.awt.*;
 import java.awt.event.FocusEvent;
 import java.awt.event.FocusListener;
 import java.util.ArrayList;
@@ -142,47 +157,82 @@ public class ErgoKeysPlugin implements ApplicationComponent {
             }
         });
 
-        ApplicationManager.getApplication().getMessageBus().connect().subscribe(AnActionListener.TOPIC, new AnActionListener() {
-            @Override
-            public void beforeActionPerformed(@NotNull AnAction action, @NotNull DataContext dataContext, @NotNull AnActionEvent event) {
-                LOG.debug("beforeActionPerformed: action.class=", action.getClass());
+                ApplicationManager.getApplication().getMessageBus().connect().subscribe(AnActionListener.TOPIC, new AnActionListener() {
+                    @Override
+                    public void beforeActionPerformed(@NotNull AnAction action, @NotNull DataContext dataContext, @NotNull AnActionEvent event) {
+                        Class<? extends AnAction> thisAction = action.getClass();
+                        LOG.debug("beforeActionPerformed: action.class=", thisAction);
+                        ActionManager am = ActionManager.getInstance();
+                        // String id = am.getId(action);
+                        // System.out.println("Action ID: " + id);
 
-                if (action.getClass().equals(SearchEverywhereAction.class) ||
-                        action.getClass().equals(RunAnythingAction.class) ||
-                        action.getClass().equals(IncrementalFindAction.class) ||
-                        action.getClass().equals(FindInPathAction.class) ||
-                        action.getClass().equals(ViewStructureAction.class)) {
-                    final Editor editor = dataContext.getData(CommonDataKeys.EDITOR);
-                    activateInsertMode(editor);
-                }
-            }
+                        if(/*thisAction.equals(SearchEverywhereAction.class) ||*/
+//                                thisAction.equals(RunAnythingAction.class) ||
+//                                thisAction.equals(IncrementalFindAction.class) ||
+//                                thisAction.equals(ReplaceAction.class) ||
+//                                thisAction.equals(FindInPathAction.class) ||
+//                                thisAction.equals(ViewStructureAction.class) ||
+                                // Refactoring actions.
+                                thisAction.equals(RenameElementAction.class) ||
+                                thisAction.equals(RenameFileAction.class) ||
+                                action instanceof BaseRefactoringAction
+                                /*thisAction.equals(ShowSettingsAction.class)*/ ){
 
-            @Override
-            public void afterActionPerformed(@NotNull AnAction action, @NotNull DataContext dataContext, @NotNull AnActionEvent event) {
-                LOG.debug("afterActionPerformed: action.class=", action.getClass());
-            }
+                            final Editor editor = dataContext.getData(CommonDataKeys.EDITOR);
+                            activateInsertMode(editor);
+                        }
+                    }
 
-            @Override
-            public void beforeEditorTyping(char c, @NotNull DataContext dataContext) {
-                LOG.debug("beforeEditorTyping: c=", c);
-            }
-        });
+                    @Override
+                    public void afterActionPerformed(@NotNull AnAction action, @NotNull DataContext dataContext, @NotNull AnActionEvent event) {
+                        LOG.debug("afterActionPerformed: action.class=", action.getClass());
+
+                        if(action instanceof HideAllToolWindowsAction){
+                            activateCommandMode(lastEditorUsed);
+                        }
+                    }
+
+                    @Override
+                    public void beforeEditorTyping(char c, @NotNull DataContext dataContext) {
+                        LOG.debug("beforeEditorTyping: c=", c);
+                    }
+                });
 
         EditorFactory.getInstance().addEditorFactoryListener(
                 new EditorFactoryListener() {
                     @Override
                     public void editorCreated(@NotNull EditorFactoryEvent event) {
                         Editor editor = event.getEditor();
+
                         editor.getContentComponent().addFocusListener(new FocusListener() {
                             @Override
                             public void focusGained(FocusEvent focusEvent) {
                                 LOG.debug("focusGained: focusEvent=", focusEvent);
-                                editor.getSettings().setBlockCursor(inCommandMode());
+
+                                // Check what the last window we were on was. If it was the search/replace or terminal,
+                                // switch back to command mode.
+//                                Component opposite = focusEvent.getOppositeComponent();
+//                                if(opposite != null) {
+//                                    Class<?> ec = opposite.getClass().getEnclosingClass();
+//
+//                                    if(ec != null && ec.equals(SearchReplaceComponent.class) ||
+//                                            opposite instanceof JBTerminalPanel) {
+//                                        activateCommandMode(editor);
+//                                    }
+//                                }
+                                activateCommandMode(editor);
+//                                editor.getSettings().setBlockCursor(inCommandMode());
                             }
 
                             @Override
                             public void focusLost(FocusEvent focusEvent) {
                                 LOG.debug("focusLost: focusEvent=", focusEvent);
+                                Component c = focusEvent.getOppositeComponent();
+
+                                // Automatically switch to insert mode when switching over to terminal.
+//                                if(c instanceof JBTerminalPanel){
+                                    activateInsertMode(editor);
+//                                }
                                 lastEditorUsed = editor;
                             }
                         });

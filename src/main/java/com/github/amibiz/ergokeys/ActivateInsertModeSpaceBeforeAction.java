@@ -10,9 +10,11 @@ import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
+import org.jetbrains.annotations.NotNull;
 
 public class ActivateInsertModeSpaceBeforeAction extends DumbAwareAction {
     final private ActionManager actionManager = ActionManager.getInstance();
+    private @NotNull Caret currentCaret;
 
     @Override
     public void actionPerformed(AnActionEvent e) {
@@ -21,7 +23,6 @@ public class ActivateInsertModeSpaceBeforeAction extends DumbAwareAction {
         final Document document = editor.getDocument();
         final CaretModel caretModel = editor.getCaretModel();
         final Caret caret = caretModel.getCurrentCaret();
-
         WriteCommandAction.runWriteCommandAction(project, new Runnable() {
             @Override
             public void run() {

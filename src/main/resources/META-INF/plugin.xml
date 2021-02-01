@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.github.amibiz.ergokeys</id>
     <name>ErgoKeys</name>
-    <vendor url="https://github.com/amibiz/ergo-keys">Ami E. Bizamcher (aeb)</vendor>
+    <vendor url="https://github.com/amibiz/ergo-keys">Ami E. Bizamcher (Omar Version)</vendor>
 
     <description><![CDATA[
     Supercharge your productivity with the most efficient keybinding for IntelliJ family of IDEs.
