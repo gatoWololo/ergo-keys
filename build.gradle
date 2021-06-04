@@ -4,7 +4,8 @@ plugins {
 }
 
 group 'com.github.amibiz'
-version '1.12'
+// Omar version to avoid update issues with ergo-keys upstream if they bump version higher than mine.
+version '2.00'
 
 sourceCompatibility = "1.8"
 targetCompatibility = "1.8"

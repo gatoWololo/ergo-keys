@@ -30,15 +30,18 @@ import com.intellij.openapi.editor.actions.IncrementalFindAction;
 import com.intellij.openapi.editor.actions.ReplaceAction;
 import com.intellij.openapi.editor.event.EditorFactoryEvent;
 import com.intellij.openapi.editor.event.EditorFactoryListener;
+import com.intellij.openapi.editor.impl.EditorComponentImpl;
 import com.intellij.openapi.keymap.Keymap;
 import com.intellij.openapi.keymap.KeymapManagerListener;
 import com.intellij.openapi.keymap.ex.KeymapManagerEx;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
 import com.intellij.refactoring.actions.BaseRefactoringAction;
 import com.intellij.refactoring.actions.RenameElementAction;
 import com.intellij.refactoring.actions.RenameFileAction;
 import com.intellij.refactoring.listeners.RefactoringElementListener;
 import com.intellij.terminal.JBTerminalPanel;
+import com.intellij.ui.ComboBoxCompositeEditor;
 import com.jediterm.terminal.ui.TerminalPanelListener;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -74,9 +77,9 @@ public class ErgoKeysPlugin implements ApplicationComponent {
         propertiesComponent = PropertiesComponent.getInstance();
     }
 
-    @Override
-    public void disposeComponent() {
-    }
+//    @Override
+//    public void disposeComponent() {
+//    }
 
     @NotNull
     @Override
@@ -112,7 +115,6 @@ public class ErgoKeysPlugin implements ApplicationComponent {
         String commandModeKeymapName = this.loadPersistentProperty("commandModeKeymapName");
         if (commandModeKeymapName == null) {
             commandModeKeymap = keymapManagerEx.getKeymap(DEFAULT_ERGOKEYS_KEYMAP);
-            ;
             assert commandModeKeymap != null;
         } else {
             commandModeKeymap = keymapManagerEx.getKeymap(commandModeKeymapName);
@@ -163,21 +165,17 @@ public class ErgoKeysPlugin implements ApplicationComponent {
                         Class<? extends AnAction> thisAction = action.getClass();
                         LOG.debug("beforeActionPerformed: action.class=", thisAction);
                         ActionManager am = ActionManager.getInstance();
-                        // String id = am.getId(action);
-                        // System.out.println("Action ID: " + id);
 
-                        if(/*thisAction.equals(SearchEverywhereAction.class) ||*/
-//                                thisAction.equals(RunAnythingAction.class) ||
-//                                thisAction.equals(IncrementalFindAction.class) ||
-//                                thisAction.equals(ReplaceAction.class) ||
-//                                thisAction.equals(FindInPathAction.class) ||
-//                                thisAction.equals(ViewStructureAction.class) ||
-                                // Refactoring actions.
-                                thisAction.equals(RenameElementAction.class) ||
-                                thisAction.equals(RenameFileAction.class) ||
-                                action instanceof BaseRefactoringAction
-                                /*thisAction.equals(ShowSettingsAction.class)*/ ){
-
+                        // Omar: I need checks here like for @FindInPathAction. If we try to rely solely on the focus
+                        // lost event below, we end up in a weird state where the first 'i' works, but if any matches
+                        // show up subsequent calls to 'i' or 'k' will scroll up and down options instead. Making it
+                        // impossible to press these buttons. So before the action even launches we switch to activate
+                        // mode. This seems to fix it; probably because we entirely skip command mode. Still not sure
+                        // what causes the weird behavior without this. More may have to be added later.
+                        if(thisAction.equals(FindInPathAction.class) ||
+                           thisAction.equals(SearchEverywhereAction.class) ||
+                           thisAction.equals(RenameFileAction.class) ||
+                           action instanceof BaseRefactoringAction){
                             final Editor editor = dataContext.getData(CommonDataKeys.EDITOR);
                             activateInsertMode(editor);
                         }
@@ -187,14 +185,9 @@ public class ErgoKeysPlugin implements ApplicationComponent {
                     public void afterActionPerformed(@NotNull AnAction action, @NotNull DataContext dataContext, @NotNull AnActionEvent event) {
                         LOG.debug("afterActionPerformed: action.class=", action.getClass());
 
-                        if(action instanceof HideAllToolWindowsAction){
-                            activateCommandMode(lastEditorUsed);
-                        }
-                    }
-
-                    @Override
-                    public void beforeEditorTyping(char c, @NotNull DataContext dataContext) {
-                        LOG.debug("beforeEditorTyping: c=", c);
+//                        if(action instanceof HideAllToolWindowsAction){
+//                            activateCommandMode(lastEditorUsed);
+//                        }
                     }
                 });
 
@@ -207,33 +200,22 @@ public class ErgoKeysPlugin implements ApplicationComponent {
                         editor.getContentComponent().addFocusListener(new FocusListener() {
                             @Override
                             public void focusGained(FocusEvent focusEvent) {
-                                LOG.debug("focusGained: focusEvent=", focusEvent);
+                                LOG.debug("focusGained: focusEvent=", focusEvent.toString());
 
-                                // Check what the last window we were on was. If it was the search/replace or terminal,
-                                // switch back to command mode.
-//                                Component opposite = focusEvent.getOppositeComponent();
-//                                if(opposite != null) {
-//                                    Class<?> ec = opposite.getClass().getEnclosingClass();
-//
-//                                    if(ec != null && ec.equals(SearchReplaceComponent.class) ||
-//                                            opposite instanceof JBTerminalPanel) {
-//                                        activateCommandMode(editor);
-//                                    }
-//                                }
-                                activateCommandMode(editor);
-//                                editor.getSettings().setBlockCursor(inCommandMode());
+                                EditorComponentImpl e = (EditorComponentImpl)(focusEvent.getSource());
+                                VirtualFile f = e.getEditor().getVirtualFile();
+                                // No file name. Assume it is not the "main" editor windows where user modifies code.
+                                if(f != null){
+                                    activateCommandMode(editor);
+                                }
                             }
 
                             @Override
                             public void focusLost(FocusEvent focusEvent) {
                                 LOG.debug("focusLost: focusEvent=", focusEvent);
-                                Component c = focusEvent.getOppositeComponent();
-
-                                // Automatically switch to insert mode when switching over to terminal.
-//                                if(c instanceof JBTerminalPanel){
-                                    activateInsertMode(editor);
-//                                }
-                                lastEditorUsed = editor;
+                                // Will we need this?
+//                                lastEditorUsed = editor;
+                                activateInsertMode(editor);
                             }
                         });
                     }
@@ -254,6 +236,7 @@ public class ErgoKeysPlugin implements ApplicationComponent {
     }
 
     public void activateCommandMode(Editor editor) {
+        LOG.debug("activateCommandMode");
         if (settings.isCommandModeToggle() && inCommandMode()) {
             activateInsertMode(editor);
             return;
@@ -263,6 +246,7 @@ public class ErgoKeysPlugin implements ApplicationComponent {
     }
 
     public void activateInsertMode(Editor editor) {
+        LOG.debug("activateInsertMode");
         editor.getSettings().setBlockCursor(false);
         this.keymapManagerEx.setActiveKeymap(insertModeKeymap);
     }
